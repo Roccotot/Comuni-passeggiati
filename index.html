@@ -12,53 +12,6 @@
 </head>
 <body>
 
-<!-- GATE SCREEN: visibile finché non si seleziona la cartella -->
-<div id="gate-screen" style="position:fixed;inset:0;z-index:10000;background:#f8f9fa;display:flex;align-items:center;justify-content:center;overflow-y:auto;">
-  <div class="container" style="max-width:520px;padding:2rem 1rem;">
-    <div class="text-center mb-4">
-      <div style="font-size:3.5rem">🚶</div>
-      <h2 class="fw-bold text-success mb-1">Comuni Passeggiati</h2>
-      <p class="text-muted">Segna i comuni italiani che hai visitato</p>
-    </div>
-
-    <!-- Prima volta: seleziona cartella -->
-    <div id="gate-setup" class="card border-0 shadow-sm">
-      <div class="card-body p-4">
-        <h5 class="fw-bold mb-1">📁 Seleziona una cartella</h5>
-        <p class="text-muted small mb-3">
-          I tuoi dati vengono salvati in un file <code>comuni-passeggiati.json</code> nella cartella che scegli.<br>
-          Puoi usare una cartella di <strong>Google Drive</strong>, <strong>OneDrive</strong> o qualsiasi altra cartella sul tuo PC.
-        </p>
-        <button class="btn btn-success w-100 py-2" id="gate-btn-connect">
-          📂 Scegli cartella e accedi
-        </button>
-        <p class="text-muted small mt-3 mb-0 text-center">
-          I dati rimangono solo sul tuo computer, non vengono inviati a nessun server.
-        </p>
-      </div>
-    </div>
-
-    <!-- Ritorno: richiedi permesso cartella precedente -->
-    <div id="gate-reconnect" class="card border-0 shadow-sm d-none">
-      <div class="card-body p-4">
-        <h5 class="fw-bold mb-1">📁 Riapri la cartella</h5>
-        <p class="text-muted small mb-1">Cartella precedente:</p>
-        <div class="alert alert-secondary py-2 small fw-semibold mb-3" id="gate-folder-name"></div>
-        <p class="text-muted small mb-3">
-          Il browser richiede di confermare l'accesso alla cartella ad ogni apertura.
-        </p>
-        <button class="btn btn-success w-100 mb-2" id="gate-btn-reconnect">
-          ✅ Riapri questa cartella
-        </button>
-        <button class="btn btn-outline-secondary w-100" id="gate-btn-new-folder">
-          📂 Scegli una cartella diversa
-        </button>
-      </div>
-    </div>
-
-  </div>
-</div>
-
 <!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-success py-2">
   <div class="container-fluid d-flex align-items-center gap-3">
@@ -67,9 +20,17 @@
     <div class="ms-auto d-flex align-items-center gap-2">
       <span class="badge bg-light text-success fs-6 px-3 py-2" id="badge-totale">0 / 7978</span>
       <span class="badge bg-white text-success fs-6 px-3 py-2" id="badge-pct">0%</span>
-      <button class="btn btn-sm btn-outline-light px-2 py-1" id="btn-folder-open" title="Cartella di salvataggio">
-        <span id="folder-icon">📁</span>
+      <!-- Esporta backup nella cartella salvataggi -->
+      <button class="btn btn-sm btn-outline-light px-2 py-1" id="btn-export"
+              title="Esporta backup in salvataggi/comuni-passeggiati.json">
+        💾 Salva copia
       </button>
+      <!-- Importa da file -->
+      <button class="btn btn-sm btn-outline-light px-2 py-1" id="btn-import"
+              title="Importa dati da file">
+        📂 Importa
+      </button>
+      <input type="file" id="import-file-input" accept=".json" class="d-none">
     </div>
   </div>
 </nav>
@@ -192,35 +153,6 @@
       <div id="stats-container" class="row g-3"></div>
     </div>
 
-  </div>
-</div>
-
-<!-- MODAL CARTELLA -->
-<div class="modal fade" id="modal-cartella" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header bg-dark text-white py-2">
-        <h6 class="modal-title fw-bold">📁 Cartella di salvataggio</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="folder-connected" class="d-none">
-          <div class="alert alert-success py-2 small mb-3">
-            ✅ I dati vengono salvati automaticamente in:<br>
-            <strong id="folder-info-name" class="text-success"></strong>/comuni-passeggiati.json
-          </div>
-          <button class="btn btn-outline-secondary btn-sm w-100" id="btn-folder-change">
-            📂 Cambia cartella
-          </button>
-        </div>
-        <div id="folder-disconnected">
-          <p class="text-muted small mb-3">Seleziona la cartella dove salvare i dati (es. una cartella Google Drive o OneDrive).</p>
-          <button class="btn btn-success btn-sm w-100" id="btn-folder-select">
-            📂 Seleziona cartella
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 

@@ -46,154 +46,47 @@ const dom = {
 // ── Leaflet map ────────────────────────────────────────────
 let map, layerAll, layerVisited;
 
-// ── Salvataggio su cartella locale ─────────────────────────
-const DATA_FILE = 'comuni-passeggiati.json';
-const DB_NAME   = 'comuni-passeggiati';
-const DB_STORE  = 'handles';
-let _dirHandle  = null;
-
-// IndexedDB helpers
-function openIDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore(DB_STORE);
-    req.onsuccess = e => resolve(e.target.result);
-    req.onerror   = e => reject(e.target.error);
-  });
-}
-async function idbGet(key) {
-  const db = await openIDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(DB_STORE).objectStore(DB_STORE).get(key);
-    req.onsuccess = e => resolve(e.target.result ?? null);
-    req.onerror   = e => reject(e.target.error);
-  });
-}
-async function idbSet(key, val) {
-  const db = await openIDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readwrite');
-    tx.objectStore(DB_STORE).put(val, key);
-    tx.oncomplete = resolve;
-    tx.onerror    = e => reject(e.target.error);
-  });
-}
-
-function setFolderIcon(icon) {
-  const el = $('folder-icon');
-  if (el) el.textContent = icon;
-}
-
-async function readFileData(dirHandle) {
-  try {
-    const fh   = await dirHandle.getFileHandle(DATA_FILE);
-    const file = await fh.getFile();
-    return JSON.parse(await file.text() || '{}');
-  } catch { return null; }
-}
-
-async function writeFileData(dirHandle, visited) {
-  const fh       = await dirHandle.getFileHandle(DATA_FILE, { create: true });
-  const writable = await fh.createWritable();
-  await writable.write(JSON.stringify(visited));
-  await writable.close();
-}
-
-async function saveVisited() {
+// ── Salvataggio ────────────────────────────────────────────
+function saveVisited() {
   localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-  if (!_dirHandle) return;
-  setFolderIcon('💾');
-  try {
-    await writeFileData(_dirHandle, state.visited);
-    setFolderIcon('📁');
-  } catch (e) {
-    setFolderIcon('⚠️');
-    showToast('Errore salvataggio: ' + e.message, 'bg-danger');
-  }
 }
 
-async function pickFolder() {
-  try {
-    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    await idbSet('dir', handle);
-    _dirHandle = handle;
-    return handle;
-  } catch (e) {
-    if (e.name !== 'AbortError') showToast('Errore: ' + e.message, 'bg-danger');
-    return null;
-  }
+function exportData() {
+  const blob = new Blob([JSON.stringify(state.visited, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'comuni-passeggiati.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('📥 File scaricato nella cartella salvataggi!', 'bg-success');
 }
 
-// ===========================================================
-// GATE — seleziona cartella al primo avvio
-// ===========================================================
-function hideGate() {
-  const gate = $('gate-screen');
-  if (gate) gate.style.display = 'none';
-}
-
-function showReconnectGate(handle) {
-  $('gate-setup').classList.add('d-none');
-  $('gate-reconnect').classList.remove('d-none');
-  $('gate-folder-name').textContent = handle.name;
-
-  $('gate-btn-reconnect').addEventListener('click', async () => {
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
     try {
-      const perm = await handle.requestPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        _dirHandle = handle;
-        hideGate();
-        await loadData();
-        setupEventListeners();
-      }
-    } catch (e) {
-      showToast('Permesso negato: ' + e.message, 'bg-danger');
+      const data = JSON.parse(e.target.result);
+      // Unisce i dati importati con quelli esistenti
+      state.visited = { ...state.visited, ...data };
+      saveVisited();
+      updateStats();
+      renderTable();
+      if (state.mapReady) updateMapMarkers();
+      showToast(`✅ Importati ${Object.keys(data).length} comuni visitati!`, 'bg-success');
+    } catch {
+      showToast('❌ File non valido', 'bg-danger');
     }
-  });
-
-  $('gate-btn-new-folder').addEventListener('click', async () => {
-    const h = await pickFolder();
-    if (h) {
-      hideGate();
-      await loadData();
-      setupEventListeners();
-    }
-  });
-}
-
-function setupGate() {
-  $('gate-btn-connect').addEventListener('click', async () => {
-    const h = await pickFolder();
-    if (h) {
-      hideGate();
-      await loadData();
-      setupEventListeners();
-    }
-  });
+  };
+  reader.readAsText(file);
 }
 
 // ===========================================================
 // INIT
 // ===========================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  // Prova a ripristinare la cartella dalla sessione precedente
-  try {
-    const saved = await idbGet('dir');
-    if (saved) {
-      const perm = await saved.queryPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        _dirHandle = saved;
-        hideGate();
-        await loadData();
-        setupEventListeners();
-        return;
-      }
-      // Permesso da chiedere di nuovo — mostra pulsante "Riapri"
-      showReconnectGate(saved);
-      return;
-    }
-  } catch { /* nessuna cartella salvata */ }
-  setupGate();
+  await loadData();
+  setupEventListeners();
 });
 
 async function loadData() {
@@ -207,23 +100,7 @@ async function loadData() {
     return;
   }
 
-  // Legge i dati visitati: prima dal file, poi da localStorage
-  const localData = JSON.parse(localStorage.getItem('comuni_visited') || '{}');
-  if (_dirHandle) {
-    setFolderIcon('📂');
-    const fileData = await readFileData(_dirHandle);
-    if (fileData !== null) {
-      // Unisce locale e file: nessun dato viene perso
-      state.visited = { ...localData, ...fileData };
-      await saveVisited(); // salva il merge
-    } else {
-      // Prima volta: usa i dati locali e salva nel file
-      state.visited = localData;
-      await saveVisited();
-    }
-  } else {
-    state.visited = localData;
-  }
+  state.visited = JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 
   dom.loading().classList.add('d-none');
   dom.tableWrap().classList.remove('d-none');
@@ -231,8 +108,6 @@ async function loadData() {
   populateFilters();
   applyFilters();
   updateStats();
-
-  if (_dirHandle) setFolderIcon('📁');
 }
 
 // ===========================================================
@@ -423,7 +298,7 @@ function confermaToggle() {
     delete state.visited[id];
   }
 
-  saveVisited(); // salva su file e localStorage
+  saveVisited();
 
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
@@ -464,7 +339,6 @@ function updateStats() {
 }
 
 function renderStatsPanel() {
-  // Raggruppa per regione → provincia
   const regionMap = {};
   state.comuni.forEach(c => {
     if (!regionMap[c.regione]) regionMap[c.regione] = {};
@@ -538,14 +412,12 @@ function initMap() {
 
   state.comuni.forEach(c => {
     if (!c.lat || !c.lng) return;
-
     const dotIcon = L.circleMarker([c.lat, c.lng], {
       radius: 3,
       fillColor: '#6c757d',
       fillOpacity: 0.5,
       stroke: false,
     });
-
     dotIcon.bindPopup(buildPopup(c));
     layerAll.addLayer(dotIcon);
   });
@@ -560,11 +432,9 @@ function initMap() {
 
 function updateMapMarkers() {
   layerVisited.clearLayers();
-
   Object.keys(state.visited).forEach(id => {
     const c = state.comuni.find(x => x.id === id);
     if (!c || !c.lat || !c.lng) return;
-
     const marker = L.circleMarker([c.lat, c.lng], {
       radius: 7,
       fillColor: '#198754',
@@ -602,26 +472,22 @@ function setupEventListeners() {
     }, 280);
   });
 
-  // Filtro regione
   dom.filterReg().addEventListener('change', e => {
     state.filters.regione = e.target.value;
     updateProvince();
     applyFilters();
   });
 
-  // Filtro provincia
   dom.filterProv().addEventListener('change', e => {
     state.filters.provincia = e.target.value;
     applyFilters();
   });
 
-  // Filtro visitato
   dom.filterVis().addEventListener('change', e => {
     state.filters.visitato = e.target.value;
     applyFilters();
   });
 
-  // Reset filtri
   $('btn-reset-filtri').addEventListener('click', () => {
     state.filters = { regione: '', provincia: '', visitato: '' };
     state.search = '';
@@ -632,14 +498,12 @@ function setupEventListeners() {
     applyFilters();
   });
 
-  // Page size
   dom.pageSizeSel().addEventListener('change', e => {
     state.pageSize = parseInt(e.target.value);
     state.page = 1;
     renderTable();
   });
 
-  // Ordinamento colonne
   document.querySelectorAll('#comuni-table th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const col = th.dataset.col;
@@ -653,60 +517,30 @@ function setupEventListeners() {
     });
   });
 
-  // Click su riga tabella (event delegation)
   dom.tbody().addEventListener('click', handleRowClick);
-
-  // Conferma modal
   dom.btnConferma().addEventListener('click', confermaToggle);
 
-  // Bottone cartella (navbar)
-  $('btn-folder-open').addEventListener('click', () => {
-    const modal = new bootstrap.Modal($('modal-cartella'));
-    if (_dirHandle) {
-      $('folder-info-name').textContent = _dirHandle.name;
-      $('folder-connected').classList.remove('d-none');
-      $('folder-disconnected').classList.add('d-none');
-    } else {
-      $('folder-connected').classList.add('d-none');
-      $('folder-disconnected').classList.remove('d-none');
-    }
-    modal.show();
+  // Esporta / Importa
+  $('btn-export').addEventListener('click', exportData);
+
+  $('btn-import').addEventListener('click', () => {
+    $('import-file-input').click();
   });
 
-  $('btn-folder-change').addEventListener('click', async () => {
-    const h = await pickFolder();
-    if (h) {
-      $('folder-info-name').textContent = h.name;
-      showToast('📁 Cartella cambiata: ' + h.name, 'bg-success');
+  $('import-file-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) {
+      importData(file);
+      e.target.value = ''; // reset per permettere di reimportare lo stesso file
     }
   });
 
-  $('btn-folder-select').addEventListener('click', async () => {
-    const h = await pickFolder();
-    if (h) {
-      $('folder-info-name').textContent = h.name;
-      $('folder-connected').classList.remove('d-none');
-      $('folder-disconnected').classList.add('d-none');
-      // Carica i dati dal nuovo file
-      const fileData = await readFileData(h);
-      if (fileData) {
-        state.visited = { ...state.visited, ...fileData };
-        await saveVisited();
-        updateStats();
-        renderTable();
-        if (state.mapReady) updateMapMarkers();
-      }
-      showToast('📁 Cartella collegata: ' + h.name, 'bg-success');
-    }
-  });
-
-  // Tab mappa: inizializza Leaflet al primo accesso
+  // Tab mappa
   document.getElementById('tab-mappa-link').addEventListener('shown.bs.tab', () => {
     if (!state.mapReady) initMap();
     else map.invalidateSize();
   });
 
-  // Toggle layer mappa
   $('map-show-all').addEventListener('change', e => {
     if (e.target.checked) map.addLayer(layerAll);
     else map.removeLayer(layerAll);
