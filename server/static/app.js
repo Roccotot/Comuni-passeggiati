@@ -79,12 +79,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadData() {
-  if (typeof window.COMUNI_DATA === 'undefined') {
+  try {
+    const res = await fetch('/comuni.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state.comuni = await res.json();
+  } catch (e) {
     dom.loading().innerHTML =
-      '<div class="alert alert-danger">Errore: comuni-data.js non trovato.<br><small>Assicurati che tutti i file siano nella stessa cartella.</small></div>';
+      '<div class="alert alert-danger">Errore nel caricamento dei dati.<br><small>' + e.message + '</small></div>';
     return;
   }
-  state.comuni = window.COMUNI_DATA;
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
   state.visited = await loadVisited();

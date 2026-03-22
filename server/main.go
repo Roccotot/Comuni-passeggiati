@@ -1,15 +1,17 @@
 package main
 
 import (
+	"compress/gzip"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+	"fmt"
 )
 
 //go:embed static
@@ -17,8 +19,32 @@ var staticFiles embed.FS
 
 const port = "8080"
 
+// gzip middleware — comprime tutte le risposte
+func withGzip(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		defer gz.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Del("Content-Length")
+		next.ServeHTTP(&gzipWriter{gz, w}, r)
+	})
+}
+
+type gzipWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+func (g *gzipWriter) Write(b []byte) (int, error) { return g.Writer.Write(b) }
+
 func main() {
-	// Percorso del file JSON accanto all'exe
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Println("Errore:", err)
@@ -26,7 +52,6 @@ func main() {
 	}
 	saveFile := filepath.Join(filepath.Dir(exe), "comuni-passeggiati.json")
 
-	// Sottocartella "static" dall'embedded FS
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		fmt.Println("Errore embed:", err)
@@ -35,8 +60,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// File statici (HTML, JS, CSS) — tutti incorporati nell'exe
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	// File statici (HTML, CSS, JS) — gzippati
+	mux.Handle("/", withGzip(http.FileServer(http.FS(sub))))
 
 	// GET /load — legge comuni-passeggiati.json accanto all'exe
 	mux.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
