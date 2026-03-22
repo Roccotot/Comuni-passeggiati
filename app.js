@@ -59,7 +59,7 @@ function exportData() {
   a.download = 'comuni-passeggiati.json';
   a.click();
   URL.revokeObjectURL(url);
-  showToast('📥 File scaricato nella cartella salvataggi!', 'bg-success');
+  showToast('💾 Salva il file scaricato dentro la cartella salvataggi/', 'bg-success');
 }
 
 function importData(file) {
@@ -100,7 +100,8 @@ async function loadData() {
     return;
   }
 
-  state.visited = JSON.parse(localStorage.getItem('comuni_visited') || '{}');
+  // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
+  state.visited = await loadVisited();
 
   dom.loading().classList.add('d-none');
   dom.tableWrap().classList.remove('d-none');
@@ -108,6 +109,21 @@ async function loadData() {
   populateFilters();
   applyFilters();
   updateStats();
+}
+
+async function loadVisited() {
+  try {
+    const res = await fetch('salvataggi/comuni-passeggiati.json');
+    if (res.ok) {
+      const data = await res.json();
+      // Sincronizza anche localStorage
+      localStorage.setItem('comuni_visited', JSON.stringify(data));
+      return data;
+    }
+  } catch {
+    // file non trovato o CORS: usa localStorage
+  }
+  return JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 }
 
 // ===========================================================
