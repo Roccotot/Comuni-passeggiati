@@ -523,9 +523,7 @@ function setupEventListeners() {
   dom.tbody().addEventListener('click', handleRowClick);
   dom.btnConferma().addEventListener('click', confermaToggle);
 
-  // Esporta / Importa
-  $('btn-export').addEventListener('click', exportData);
-
+  // Importa
   $('btn-import').addEventListener('click', () => {
     $('import-file-input').click();
   });
