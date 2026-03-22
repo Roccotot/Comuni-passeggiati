@@ -138,11 +138,62 @@ async function pushToGist() {
 }
 
 // ===========================================================
+// GATE — blocca l'accesso finché non c'è un Gist configurato
+// ===========================================================
+function hideGate() {
+  const gate = document.getElementById('gate-screen');
+  if (gate) gate.style.display = 'none';
+}
+
+function setupGate() {
+  const btn = document.getElementById('gate-btn-connect');
+  const input = document.getElementById('gate-token-input');
+  const errEl = document.getElementById('gate-error');
+
+  btn.addEventListener('click', async () => {
+    const token = input.value.trim();
+    errEl.classList.add('d-none');
+    if (!token) {
+      errEl.textContent = 'Inserisci il token.';
+      errEl.classList.remove('d-none');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Connessione…';
+
+    try {
+      const gistId = await gistApiCreate(token);
+      setGistConfig({ token, gistId });
+      hideGate();
+      await loadData();
+      setupEventListeners();
+      setGistIcon('☁️');
+    } catch (e) {
+      errEl.textContent = 'Errore: ' + e.message + '. Controlla il token.';
+      errEl.classList.remove('d-none');
+      btn.disabled = false;
+      btn.textContent = 'Collega e accedi';
+    }
+  });
+
+  // Permetti invio con Enter
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btn.click();
+  });
+}
+
+// ===========================================================
 // INIT
 // ===========================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadData();
-  setupEventListeners();
+  if (getGistConfig()) {
+    hideGate();
+    await loadData();
+    setupEventListeners();
+  } else {
+    setupGate();
+  }
 });
 
 async function loadData() {
@@ -650,12 +701,8 @@ function setupEventListeners() {
 
   $('btn-gist-disconnect').addEventListener('click', () => {
     setGistConfig(null);
-    setGistIcon('💾');
-    document.getElementById('gist-disconnected').classList.remove('d-none');
-    document.getElementById('gist-connected').classList.add('d-none');
-    document.getElementById('gist-token-input').value = '';
-    showToast('Disconnesso da Gist', 'bg-warning');
-    gistModal.hide();
+    // Ricarica la pagina: mostra il gate di setup
+    location.reload();
   });
 
   // Tab mappa: inizializza Leaflet al primo accesso

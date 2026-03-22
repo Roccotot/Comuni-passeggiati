@@ -12,6 +12,44 @@
 </head>
 <body>
 
+<!-- GATE SCREEN: visibile finché non si configura il Gist -->
+<div id="gate-screen" style="position:fixed;inset:0;z-index:10000;background:#f8f9fa;display:flex;align-items:center;justify-content:center;overflow-y:auto;">
+  <div class="container" style="max-width:520px;padding:2rem 1rem;">
+    <div class="text-center mb-4">
+      <div style="font-size:3.5rem">🚶</div>
+      <h2 class="fw-bold text-success mb-1">Comuni Passeggiati</h2>
+      <p class="text-muted">Segna i comuni italiani che hai visitato</p>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-1">☁️ Collega il tuo GitHub Gist</h5>
+        <p class="text-muted small mb-3">I tuoi dati vengono salvati sul tuo account GitHub — non li perdi mai, funziona su qualsiasi dispositivo.</p>
+
+        <label class="form-label fw-semibold">Personal Access Token GitHub</label>
+        <input type="password" class="form-control mb-1" id="gate-token-input" placeholder="ghp_xxxxxxxxxxxxxxxx" autocomplete="off">
+
+        <div class="form-text mb-3">
+          <strong>Come ottenerlo:</strong><br>
+          1. Vai su <strong>github.com → Settings → Developer settings</strong><br>
+          2. <strong>Personal access tokens → Tokens (classic)</strong><br>
+          3. Clicca <strong>Generate new token (classic)</strong><br>
+          4. Spunta solo il permesso <code>gist</code> e genera<br>
+          5. Copia e incolla il token qui sopra
+        </div>
+
+        <div id="gate-error" class="alert alert-danger py-2 small d-none"></div>
+
+        <button class="btn btn-success w-100" id="gate-btn-connect">
+          Collega e accedi
+        </button>
+      </div>
+    </div>
+    <p class="text-center text-muted small mt-3">
+      Il token viene salvato solo nel tuo browser, non viene mai inviato a terzi.
+    </p>
+  </div>
+</div>
+
 <!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-success py-2">
   <div class="container-fluid d-flex align-items-center gap-3">
