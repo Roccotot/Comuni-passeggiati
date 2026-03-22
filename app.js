@@ -5,6 +5,7 @@
 // ── Stato globale ──────────────────────────────────────────
 const state = {
   comuni: [],
+  comuniById: {},       // { id: comune } — indice per O(1) lookup
   visited: {},          // { id: true }
   filtered: [],
   page: 1,
@@ -91,6 +92,7 @@ async function loadData() {
     return;
   }
   state.comuni = window.COMUNI_DATA;
+  state.comuni.forEach(c => { state.comuniById[c.id] = c; });
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
   state.visited = await loadVisited();
@@ -106,7 +108,7 @@ async function loadData() {
 async function loadVisited() {
   // Carica dal file (via server): sempre aggiornato, indipendente dal browser
   try {
-    const res = await fetch('/salvataggi/comuni-passeggiati.json?_=' + Date.now());
+    const res = await fetch('/load?_=' + Date.now());
     if (res.ok) {
       const data = await res.json();
       localStorage.setItem('comuni_visited', JSON.stringify(data));
@@ -277,12 +279,9 @@ function handleRowClick(e) {
 
   saveVisited();
 
-  const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
-  if (row) {
-    row.classList.toggle('visitato', newVal);
-    row.classList.toggle('non-visitato', !newVal);
-    row.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
-  }
+  row.classList.toggle('visitato', newVal);
+  row.classList.toggle('non-visitato', !newVal);
+  row.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
 
   updateStats();
   if (state.mapReady) updateMapMarkers();
@@ -405,7 +404,7 @@ function initMap() {
 function updateMapMarkers() {
   layerVisited.clearLayers();
   Object.keys(state.visited).forEach(id => {
-    const c = state.comuni.find(x => x.id === id);
+    const c = state.comuniById[id];
     if (!c || !c.lat || !c.lng) return;
     const marker = L.circleMarker([c.lat, c.lng], {
       radius: 7,

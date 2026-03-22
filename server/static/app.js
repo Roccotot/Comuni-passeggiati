@@ -5,6 +5,7 @@
 // ── Stato globale ──────────────────────────────────────────
 const state = {
   comuni: [],
+  comuniById: {},       // { id: comune } — indice per O(1) lookup
   visited: {},          // { id: true }
   filtered: [],
   page: 1,
@@ -48,8 +49,14 @@ let map, layerAll, layerVisited;
 
 // ── Salvataggio ────────────────────────────────────────────
 async function saveVisited() {
-  const data = JSON.stringify(state.visited);
-  await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data });
+  const json = JSON.stringify(state.visited);
+  localStorage.setItem('comuni_visited', json);
+  // Scrive su salvataggi/comuni-passeggiati.json tramite il server
+  try {
+    await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
+  } catch {
+    // Aperto senza server (file://): solo localStorage
+  }
 }
 
 function importData(file) {
@@ -79,15 +86,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadData() {
-  try {
-    const res = await fetch('/comuni.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    state.comuni = await res.json();
-  } catch (e) {
+  if (typeof window.COMUNI_DATA === 'undefined') {
     dom.loading().innerHTML =
-      '<div class="alert alert-danger">Errore nel caricamento dei dati.<br><small>' + e.message + '</small></div>';
+      '<div class="alert alert-danger">Errore: comuni-data.js non trovato.<br><small>Assicurati che tutti i file siano nella stessa cartella.</small></div>';
     return;
   }
+  state.comuni = window.COMUNI_DATA;
+  state.comuni.forEach(c => { state.comuniById[c.id] = c; });
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
   state.visited = await loadVisited();
@@ -101,9 +106,16 @@ async function loadData() {
 }
 
 async function loadVisited() {
-  const res = await fetch('/load');
-  if (res.ok) return res.json();
-  return {};
+  // Carica dal file (via server): sempre aggiornato, indipendente dal browser
+  try {
+    const res = await fetch('/load?_=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('comuni_visited', JSON.stringify(data));
+      return data;
+    }
+  } catch {}
+  return JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 }
 
 // ===========================================================
@@ -267,12 +279,9 @@ function handleRowClick(e) {
 
   saveVisited();
 
-  const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
-  if (row) {
-    row.classList.toggle('visitato', newVal);
-    row.classList.toggle('non-visitato', !newVal);
-    row.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
-  }
+  row.classList.toggle('visitato', newVal);
+  row.classList.toggle('non-visitato', !newVal);
+  row.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
 
   updateStats();
   if (state.mapReady) updateMapMarkers();
@@ -395,7 +404,7 @@ function initMap() {
 function updateMapMarkers() {
   layerVisited.clearLayers();
   Object.keys(state.visited).forEach(id => {
-    const c = state.comuni.find(x => x.id === id);
+    const c = state.comuniById[id];
     if (!c || !c.lat || !c.lng) return;
     const marker = L.circleMarker([c.lat, c.lng], {
       radius: 7,
