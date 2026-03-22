@@ -17,7 +17,7 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
-const port = "8080"
+const port = "7000"
 
 // gzip middleware — comprime tutte le risposte
 func withGzip(next http.Handler) http.Handler {
