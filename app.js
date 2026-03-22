@@ -46,171 +46,129 @@ const dom = {
 // ── Leaflet map ────────────────────────────────────────────
 let map, layerAll, layerVisited;
 
-// ── GitHub Gist ────────────────────────────────────────────
-const GIST_FILE = 'comuni-passeggiati.json';
+// ── Salvataggio su cartella locale ─────────────────────────
+const DATA_FILE = 'comuni-passeggiati.json';
+const DB_NAME   = 'comuni-passeggiati';
+const DB_STORE  = 'handles';
+let _dirHandle  = null;
 
-function getGistConfig() {
-  try { return JSON.parse(localStorage.getItem('gist_config') || 'null'); }
-  catch { return null; }
+// IndexedDB helpers
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(DB_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
 }
-function setGistConfig(cfg) {
-  if (cfg) localStorage.setItem('gist_config', JSON.stringify(cfg));
-  else localStorage.removeItem('gist_config');
+async function idbGet(key) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(DB_STORE).objectStore(DB_STORE).get(key);
+    req.onsuccess = e => resolve(e.target.result ?? null);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(val, key);
+    tx.oncomplete = resolve;
+    tx.onerror    = e => reject(e.target.error);
+  });
 }
 
-function setGistIcon(icon) {
-  const el = document.getElementById('gist-icon');
+function setFolderIcon(icon) {
+  const el = $('folder-icon');
   if (el) el.textContent = icon;
 }
 
-async function gistApiFetch(token, gistId) {
-  const r = await fetch(`https://api.github.com/gists/${gistId}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
-  });
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
-  }
-  const data = await r.json();
-  const file = data.files[GIST_FILE];
-  if (!file) throw new Error('File non trovato nel Gist');
-  return JSON.parse(file.content || '{}');
-}
-
-async function gistApiSave(token, gistId, visited) {
-  const r = await fetch(`https://api.github.com/gists/${gistId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(visited) } } })
-  });
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
-  }
-}
-
-async function gistApiCreate(token) {
-  const r = await fetch('https://api.github.com/gists', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      description: 'Comuni Passeggiati - dati visite',
-      public: false,
-      files: { [GIST_FILE]: { content: '{}' } }
-    })
-  });
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
-  }
-  const data = await r.json();
-  return data.id;
-}
-
-async function syncFromGist() {
-  const cfg = getGistConfig();
-  if (!cfg) return;
-  setGistIcon('🔄');
+async function readFileData(dirHandle) {
   try {
-    const remote = await gistApiFetch(cfg.token, cfg.gistId);
-    // Unisce locale e remoto: nessun dato viene perso
-    const merged = { ...remote, ...state.visited };
-    const hasNewLocal = Object.keys(merged).length > Object.keys(remote).length;
-    state.visited = merged;
-    localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-    // Se c'erano dati locali non ancora sul Gist, li salva subito
-    if (hasNewLocal) await gistApiSave(cfg.token, cfg.gistId, state.visited);
-    updateStats();
-    renderTable();
-    if (state.mapReady) updateMapMarkers();
-    setGistIcon('☁️');
-  } catch (e) {
-    setGistIcon('⚠️');
-    showToast('Errore Gist: ' + e.message, 'bg-danger');
-  }
+    const fh   = await dirHandle.getFileHandle(DATA_FILE);
+    const file = await fh.getFile();
+    return JSON.parse(await file.text() || '{}');
+  } catch { return null; }
 }
 
-let _gistDirty = false;
+async function writeFileData(dirHandle, visited) {
+  const fh       = await dirHandle.getFileHandle(DATA_FILE, { create: true });
+  const writable = await fh.createWritable();
+  await writable.write(JSON.stringify(visited));
+  await writable.close();
+}
 
-async function pushToGist() {
-  const cfg = getGistConfig();
-  if (!cfg) return;
-  setGistIcon('🔄');
+async function saveVisited() {
+  localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+  if (!_dirHandle) return;
+  setFolderIcon('💾');
   try {
-    await gistApiSave(cfg.token, cfg.gistId, state.visited);
-    _gistDirty = false;
-    setGistIcon('☁️');
+    await writeFileData(_dirHandle, state.visited);
+    setFolderIcon('📁');
   } catch (e) {
-    setGistIcon('⚠️');
-    showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
+    setFolderIcon('⚠️');
+    showToast('Errore salvataggio: ' + e.message, 'bg-danger');
   }
 }
 
-function markGistDirty() {
-  _gistDirty = true;
-  setGistIcon('💾');
+async function pickFolder() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await idbSet('dir', handle);
+    _dirHandle = handle;
+    return handle;
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('Errore: ' + e.message, 'bg-danger');
+    return null;
+  }
 }
 
 // ===========================================================
-// GATE — blocca l'accesso finché non c'è un Gist configurato
+// GATE — seleziona cartella al primo avvio
 // ===========================================================
 function hideGate() {
-  const gate = document.getElementById('gate-screen');
+  const gate = $('gate-screen');
   if (gate) gate.style.display = 'none';
 }
 
-function setupGate() {
-  const btn = document.getElementById('gate-btn-connect');
-  const input = document.getElementById('gate-token-input');
-  const errEl = document.getElementById('gate-error');
+function showReconnectGate(handle) {
+  $('gate-setup').classList.add('d-none');
+  $('gate-reconnect').classList.remove('d-none');
+  $('gate-folder-name').textContent = handle.name;
 
-  btn.addEventListener('click', async () => {
-    const token = input.value.trim();
-    errEl.classList.add('d-none');
-    if (!token) {
-      errEl.textContent = 'Inserisci il token.';
-      errEl.classList.remove('d-none');
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Connessione…';
-
+  $('gate-btn-reconnect').addEventListener('click', async () => {
     try {
-      // Verifica che il token sia valido
-      const testR = await fetch('https://api.github.com/user', {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
-      });
-      if (!testR.ok) {
-        const b = await testR.json().catch(() => ({}));
-        throw new Error(`Token non valido (${testR.status} – ${b.message || '?'})`);
+      const perm = await handle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        _dirHandle = handle;
+        hideGate();
+        await loadData();
+        setupEventListeners();
       }
-
-      const gistId = await gistApiCreate(token);
-      setGistConfig({ token, gistId });
-      hideGate();
-      await loadData();
-      setupEventListeners();
-      setGistIcon('☁️');
     } catch (e) {
-      errEl.textContent = 'Errore: ' + e.message;
-      errEl.classList.remove('d-none');
-      btn.disabled = false;
-      btn.textContent = 'Collega e accedi';
+      showToast('Permesso negato: ' + e.message, 'bg-danger');
     }
   });
 
-  // Permetti invio con Enter
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') btn.click();
+  $('gate-btn-new-folder').addEventListener('click', async () => {
+    const h = await pickFolder();
+    if (h) {
+      hideGate();
+      await loadData();
+      setupEventListeners();
+    }
+  });
+}
+
+function setupGate() {
+  $('gate-btn-connect').addEventListener('click', async () => {
+    const h = await pickFolder();
+    if (h) {
+      hideGate();
+      await loadData();
+      setupEventListeners();
+    }
   });
 }
 
@@ -218,13 +176,24 @@ function setupGate() {
 // INIT
 // ===========================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  if (getGistConfig()) {
-    hideGate();
-    await loadData();
-    setupEventListeners();
-  } else {
-    setupGate();
-  }
+  // Prova a ripristinare la cartella dalla sessione precedente
+  try {
+    const saved = await idbGet('dir');
+    if (saved) {
+      const perm = await saved.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        _dirHandle = saved;
+        hideGate();
+        await loadData();
+        setupEventListeners();
+        return;
+      }
+      // Permesso da chiedere di nuovo — mostra pulsante "Riapri"
+      showReconnectGate(saved);
+      return;
+    }
+  } catch { /* nessuna cartella salvata */ }
+  setupGate();
 });
 
 async function loadData() {
@@ -238,8 +207,23 @@ async function loadData() {
     return;
   }
 
-  // Ripristina visitati da localStorage
-  state.visited = JSON.parse(localStorage.getItem('comuni_visited') || '{}');
+  // Legge i dati visitati: prima dal file, poi da localStorage
+  const localData = JSON.parse(localStorage.getItem('comuni_visited') || '{}');
+  if (_dirHandle) {
+    setFolderIcon('📂');
+    const fileData = await readFileData(_dirHandle);
+    if (fileData !== null) {
+      // Unisce locale e file: nessun dato viene perso
+      state.visited = { ...localData, ...fileData };
+      await saveVisited(); // salva il merge
+    } else {
+      // Prima volta: usa i dati locali e salva nel file
+      state.visited = localData;
+      await saveVisited();
+    }
+  } else {
+    state.visited = localData;
+  }
 
   dom.loading().classList.add('d-none');
   dom.tableWrap().classList.remove('d-none');
@@ -248,11 +232,7 @@ async function loadData() {
   applyFilters();
   updateStats();
 
-  // Se c'è un Gist configurato, sincronizza in background
-  if (getGistConfig()) {
-    setGistIcon('☁️');
-    syncFromGist();
-  }
+  if (_dirHandle) setFolderIcon('📁');
 }
 
 // ===========================================================
@@ -442,8 +422,8 @@ function confermaToggle() {
   } else {
     delete state.visited[id];
   }
-  localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-  markGistDirty();
+
+  saveVisited(); // salva su file e localStorage
 
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
@@ -679,69 +659,45 @@ function setupEventListeners() {
   // Conferma modal
   dom.btnConferma().addEventListener('click', confermaToggle);
 
-  // Gist modal
-  let gistModal;
-  function openGistModal() {
-    const cfg = getGistConfig();
-    document.getElementById('gist-disconnected').classList.toggle('d-none', !!cfg);
-    document.getElementById('gist-connected').classList.toggle('d-none', !cfg);
-    document.getElementById('gist-connect-error').classList.add('d-none');
-    if (!gistModal) gistModal = new bootstrap.Modal($('modal-gist'));
-    gistModal.show();
-  }
+  // Bottone cartella (navbar)
+  $('btn-folder-open').addEventListener('click', () => {
+    const modal = new bootstrap.Modal($('modal-cartella'));
+    if (_dirHandle) {
+      $('folder-info-name').textContent = _dirHandle.name;
+      $('folder-connected').classList.remove('d-none');
+      $('folder-disconnected').classList.add('d-none');
+    } else {
+      $('folder-connected').classList.add('d-none');
+      $('folder-disconnected').classList.remove('d-none');
+    }
+    modal.show();
+  });
 
-  $('btn-gist-open').addEventListener('click', openGistModal);
-
-  $('btn-gist-connect').addEventListener('click', async () => {
-    const token = document.getElementById('gist-token-input').value.trim();
-    const errEl = document.getElementById('gist-connect-error');
-    errEl.classList.add('d-none');
-    if (!token) { errEl.textContent = 'Inserisci il token.'; errEl.classList.remove('d-none'); return; }
-
-    const btn = $('btn-gist-connect');
-    btn.disabled = true;
-    btn.textContent = 'Connessione…';
-
-    try {
-      const gistId = await gistApiCreate(token);
-      setGistConfig({ token, gistId });
-      // Salva i dati locali sul nuovo Gist
-      await gistApiSave(token, gistId, state.visited);
-      setGistIcon('☁️');
-      document.getElementById('gist-disconnected').classList.add('d-none');
-      document.getElementById('gist-connected').classList.remove('d-none');
-    } catch (e) {
-      errEl.textContent = 'Errore: ' + e.message + '. Controlla il token.';
-      errEl.classList.remove('d-none');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Collega Gist';
+  $('btn-folder-change').addEventListener('click', async () => {
+    const h = await pickFolder();
+    if (h) {
+      $('folder-info-name').textContent = h.name;
+      showToast('📁 Cartella cambiata: ' + h.name, 'bg-success');
     }
   });
 
-  $('btn-gist-sync').addEventListener('click', async () => {
-    await pushToGist();
-    await syncFromGist();
-    showToast('☁️ Sincronizzato con Gist!', 'bg-success');
-  });
-
-  // Salva su Gist quando l'utente lascia la pagina
-  window.addEventListener('beforeunload', () => {
-    if (!_gistDirty) return;
-    const cfg = getGistConfig();
-    if (!cfg) return;
-    fetch(`https://api.github.com/gists/${cfg.gistId}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(state.visited) } } }),
-      keepalive: true
-    });
-  });
-
-  $('btn-gist-disconnect').addEventListener('click', () => {
-    setGistConfig(null);
-    // Ricarica la pagina: mostra il gate di setup
-    location.reload();
+  $('btn-folder-select').addEventListener('click', async () => {
+    const h = await pickFolder();
+    if (h) {
+      $('folder-info-name').textContent = h.name;
+      $('folder-connected').classList.remove('d-none');
+      $('folder-disconnected').classList.add('d-none');
+      // Carica i dati dal nuovo file
+      const fileData = await readFileData(h);
+      if (fileData) {
+        state.visited = { ...state.visited, ...fileData };
+        await saveVisited();
+        updateStats();
+        renderTable();
+        if (state.mapReady) updateMapMarkers();
+      }
+      showToast('📁 Cartella collegata: ' + h.name, 'bg-success');
+    }
   });
 
   // Tab mappa: inizializza Leaflet al primo accesso

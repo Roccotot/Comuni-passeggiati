@@ -12,7 +12,7 @@
 </head>
 <body>
 
-<!-- GATE SCREEN: visibile finché non si configura il Gist -->
+<!-- GATE SCREEN: visibile finché non si seleziona la cartella -->
 <div id="gate-screen" style="position:fixed;inset:0;z-index:10000;background:#f8f9fa;display:flex;align-items:center;justify-content:center;overflow-y:auto;">
   <div class="container" style="max-width:520px;padding:2rem 1rem;">
     <div class="text-center mb-4">
@@ -20,33 +20,42 @@
       <h2 class="fw-bold text-success mb-1">Comuni Passeggiati</h2>
       <p class="text-muted">Segna i comuni italiani che hai visitato</p>
     </div>
-    <div class="card border-0 shadow-sm">
+
+    <!-- Prima volta: seleziona cartella -->
+    <div id="gate-setup" class="card border-0 shadow-sm">
       <div class="card-body p-4">
-        <h5 class="fw-bold mb-1">☁️ Collega il tuo GitHub Gist</h5>
-        <p class="text-muted small mb-3">I tuoi dati vengono salvati sul tuo account GitHub — non li perdi mai, funziona su qualsiasi dispositivo.</p>
+        <h5 class="fw-bold mb-1">📁 Seleziona una cartella</h5>
+        <p class="text-muted small mb-3">
+          I tuoi dati vengono salvati in un file <code>comuni-passeggiati.json</code> nella cartella che scegli.<br>
+          Puoi usare una cartella di <strong>Google Drive</strong>, <strong>OneDrive</strong> o qualsiasi altra cartella sul tuo PC.
+        </p>
+        <button class="btn btn-success w-100 py-2" id="gate-btn-connect">
+          📂 Scegli cartella e accedi
+        </button>
+        <p class="text-muted small mt-3 mb-0 text-center">
+          I dati rimangono solo sul tuo computer, non vengono inviati a nessun server.
+        </p>
+      </div>
+    </div>
 
-        <label class="form-label fw-semibold">Personal Access Token GitHub</label>
-        <input type="password" class="form-control mb-1" id="gate-token-input" placeholder="ghp_xxxxxxxxxxxxxxxx" autocomplete="off">
-
-        <div class="form-text mb-3">
-          <strong>Come ottenerlo:</strong><br>
-          1. Vai su <strong>github.com → Settings → Developer settings</strong><br>
-          2. <strong>Personal access tokens → Tokens (classic)</strong><br>
-          3. Clicca <strong>Generate new token (classic)</strong><br>
-          4. Spunta solo il permesso <code>gist</code> e genera<br>
-          5. Copia e incolla il token qui sopra
-        </div>
-
-        <div id="gate-error" class="alert alert-danger py-2 small d-none"></div>
-
-        <button class="btn btn-success w-100" id="gate-btn-connect">
-          Collega e accedi
+    <!-- Ritorno: richiedi permesso cartella precedente -->
+    <div id="gate-reconnect" class="card border-0 shadow-sm d-none">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-1">📁 Riapri la cartella</h5>
+        <p class="text-muted small mb-1">Cartella precedente:</p>
+        <div class="alert alert-secondary py-2 small fw-semibold mb-3" id="gate-folder-name"></div>
+        <p class="text-muted small mb-3">
+          Il browser richiede di confermare l'accesso alla cartella ad ogni apertura.
+        </p>
+        <button class="btn btn-success w-100 mb-2" id="gate-btn-reconnect">
+          ✅ Riapri questa cartella
+        </button>
+        <button class="btn btn-outline-secondary w-100" id="gate-btn-new-folder">
+          📂 Scegli una cartella diversa
         </button>
       </div>
     </div>
-    <p class="text-center text-muted small mt-3">
-      Il token viene salvato solo nel tuo browser, non viene mai inviato a terzi.
-    </p>
+
   </div>
 </div>
 
@@ -58,8 +67,8 @@
     <div class="ms-auto d-flex align-items-center gap-2">
       <span class="badge bg-light text-success fs-6 px-3 py-2" id="badge-totale">0 / 7978</span>
       <span class="badge bg-white text-success fs-6 px-3 py-2" id="badge-pct">0%</span>
-      <button class="btn btn-sm btn-outline-light px-2 py-1" id="btn-gist-open" title="Sincronizzazione GitHub Gist">
-        <span id="gist-icon">💾</span>
+      <button class="btn btn-sm btn-outline-light px-2 py-1" id="btn-folder-open" title="Cartella di salvataggio">
+        <span id="folder-icon">📁</span>
       </button>
     </div>
   </div>
@@ -186,41 +195,29 @@
   </div>
 </div>
 
-<!-- MODAL GIST SETTINGS -->
-<div class="modal fade" id="modal-gist" tabindex="-1">
+<!-- MODAL CARTELLA -->
+<div class="modal fade" id="modal-cartella" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header bg-dark text-white py-2">
-        <h6 class="modal-title fw-bold">☁️ Sincronizzazione GitHub Gist</h6>
+        <h6 class="modal-title fw-bold">📁 Cartella di salvataggio</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div id="gist-disconnected">
-          <p class="text-muted small mb-3">Salva le tue spunte su GitHub Gist: funziona su qualsiasi dispositivo, gratis.</p>
-          <label class="form-label fw-semibold">Personal Access Token GitHub</label>
-          <input type="password" class="form-control form-control-sm mb-1" id="gist-token-input"
-                 placeholder="ghp_xxxxxxxxxxxxxxxx">
-          <div class="form-text mb-3">
-            Vai su <strong>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)</strong><br>
-            Genera un token con permesso <code>gist</code> e incollalo qui.
+        <div id="folder-connected" class="d-none">
+          <div class="alert alert-success py-2 small mb-3">
+            ✅ I dati vengono salvati automaticamente in:<br>
+            <strong id="folder-info-name" class="text-success"></strong>/comuni-passeggiati.json
           </div>
-          <div id="gist-connect-error" class="alert alert-danger py-2 small d-none"></div>
-          <button class="btn btn-success btn-sm w-100" id="btn-gist-connect">
-            Collega Gist
+          <button class="btn btn-outline-secondary btn-sm w-100" id="btn-folder-change">
+            📂 Cambia cartella
           </button>
         </div>
-        <div id="gist-connected" class="d-none">
-          <div class="alert alert-success py-2 small mb-3">
-            ✅ Connesso al Gist — i dati vengono sincronizzati automaticamente.
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm flex-grow-1" id="btn-gist-sync">
-              🔄 Sincronizza ora
-            </button>
-            <button class="btn btn-outline-danger btn-sm" id="btn-gist-disconnect">
-              Disconnetti
-            </button>
-          </div>
+        <div id="folder-disconnected">
+          <p class="text-muted small mb-3">Seleziona la cartella dove salvare i dati (es. una cartella Google Drive o OneDrive).</p>
+          <button class="btn btn-success btn-sm w-100" id="btn-folder-select">
+            📂 Seleziona cartella
+          </button>
         </div>
       </div>
     </div>
