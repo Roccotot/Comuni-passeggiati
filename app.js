@@ -87,7 +87,10 @@ async function gistApiSave(token, gistId, visited) {
     },
     body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(visited) } } })
   });
-  if (!r.ok) throw new Error(`Errore ${r.status}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
+  }
 }
 
 async function gistApiCreate(token) {
@@ -104,7 +107,10 @@ async function gistApiCreate(token) {
       files: { [GIST_FILE]: { content: '{}' } }
     })
   });
-  if (!r.ok) throw new Error(`Errore ${r.status}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
+  }
   const data = await r.json();
   return data.id;
 }
@@ -171,6 +177,15 @@ function setupGate() {
     btn.textContent = 'Connessione…';
 
     try {
+      // Verifica che il token sia valido
+      const testR = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (!testR.ok) {
+        const b = await testR.json().catch(() => ({}));
+        throw new Error(`Token non valido (${testR.status} – ${b.message || '?'})`);
+      }
+
       const gistId = await gistApiCreate(token);
       setGistConfig({ token, gistId });
       hideGate();
@@ -178,7 +193,7 @@ function setupGate() {
       setupEventListeners();
       setGistIcon('☁️');
     } catch (e) {
-      errEl.textContent = 'Errore: ' + e.message + '. Controlla il token.';
+      errEl.textContent = 'Errore: ' + e.message;
       errEl.classList.remove('d-none');
       btn.disabled = false;
       btn.textContent = 'Collega e accedi';
