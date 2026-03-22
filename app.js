@@ -112,8 +112,13 @@ async function syncFromGist() {
   setGistIcon('🔄');
   try {
     const remote = await gistApiFetch(cfg.token, cfg.gistId);
-    state.visited = remote;
+    // Unisce locale e remoto: nessun dato viene perso
+    const merged = { ...remote, ...state.visited };
+    const hasNewLocal = Object.keys(merged).length > Object.keys(remote).length;
+    state.visited = merged;
     localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+    // Se c'erano dati locali non ancora sul Gist, li salva subito
+    if (hasNewLocal) await gistApiSave(cfg.token, cfg.gistId, state.visited);
     updateStats();
     renderTable();
     if (state.mapReady) updateMapMarkers();
