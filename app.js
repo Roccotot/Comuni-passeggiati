@@ -47,118 +47,8 @@ const dom = {
 let map, layerAll, layerVisited;
 
 // ── Salvataggio ────────────────────────────────────────────
-let dirHandle = null;   // handle alla cartella salvataggi/
-
-// IndexedDB: memorizza il dirHandle tra sessioni
-function openIDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open('ComuniPasseggiati', 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore('handles');
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = () => rej(req.error);
-  });
-}
-async function idbGet(key) {
-  const db = await openIDB();
-  return new Promise(res => {
-    const req = db.transaction('handles').objectStore('handles').get(key);
-    req.onsuccess = () => res(req.result ?? null);
-    req.onerror   = () => res(null);
-  });
-}
-async function idbPut(key, val) {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('handles', 'readwrite');
-    tx.objectStore('handles').put(val, key);
-    tx.oncomplete = res;
-    tx.onerror    = () => rej(tx.error);
-  });
-}
-
-// Scrive sul file salvataggi/comuni-passeggiati.json
-async function writeFile() {
-  if (!dirHandle) return;
-  try {
-    const fileHandle = await dirHandle.getFileHandle('comuni-passeggiati.json', { create: true });
-    const writable   = await fileHandle.createWritable();
-    await writable.write(JSON.stringify(state.visited, null, 2));
-    await writable.close();
-  } catch (e) {
-    console.warn('Scrittura file fallita:', e);
-  }
-}
-
-// Legge dal file salvataggi/comuni-passeggiati.json
-async function readFile() {
-  if (!dirHandle) return null;
-  try {
-    const fileHandle = await dirHandle.getFileHandle('comuni-passeggiati.json');
-    const file = await fileHandle.getFile();
-    return JSON.parse(await file.text());
-  } catch {
-    return null;
-  }
-}
-
-async function saveVisited() {
+function saveVisited() {
   localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-  await writeFile();
-}
-
-// Prova a riconnettersi alla cartella salvata senza mostrare dialog
-async function initDirHandle() {
-  try {
-    const stored = await idbGet('salvataggi');
-    if (!stored) { showSetupButton(); return; }
-
-    // Chiede permesso senza dialog se già concesso, altrimenti mostra bottone
-    const perm = await stored.queryPermission({ mode: 'readwrite' });
-    if (perm === 'granted') {
-      dirHandle = stored;
-      hideSaveButtons();
-    } else {
-      // Mostra un bottone per sbloccare con un click (non ripete il file picker)
-      showReconnectButton(stored);
-    }
-  } catch {
-    showSetupButton();
-  }
-}
-
-function showSetupButton() {
-  $('btn-setup-save').classList.remove('d-none');
-  $('btn-reconnect-save').classList.add('d-none');
-}
-function showReconnectButton(stored) {
-  $('btn-reconnect-save').classList.remove('d-none');
-  $('btn-setup-save').classList.add('d-none');
-  $('btn-reconnect-save').onclick = async () => {
-    const perm = await stored.requestPermission({ mode: 'readwrite' });
-    if (perm === 'granted') {
-      dirHandle = stored;
-      hideSaveButtons();
-      await saveVisited();
-      showToast('✅ Salvataggio automatico attivo!', 'bg-success');
-    }
-  };
-}
-function hideSaveButtons() {
-  $('btn-setup-save').classList.add('d-none');
-  $('btn-reconnect-save').classList.add('d-none');
-}
-
-async function setupSalvataggi() {
-  try {
-    const handle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' });
-    await idbPut('salvataggi', handle);
-    dirHandle = handle;
-    hideSaveButtons();
-    await saveVisited();
-    showToast('✅ Cartella salvataggi collegata! Da ora salva automaticamente.', 'bg-success');
-  } catch {
-    // utente ha annullato
-  }
 }
 
 function importData(file) {
@@ -185,7 +75,6 @@ function importData(file) {
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   setupEventListeners();
-  initDirHandle(); // non bloccante, gira in background
 });
 
 async function loadData() {
@@ -197,7 +86,7 @@ async function loadData() {
   state.comuni = window.COMUNI_DATA;
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
-  state.visited = await loadVisited();
+  state.visited = loadVisited();
 
   dom.loading().classList.add('d-none');
   dom.tableWrap().classList.remove('d-none');
@@ -207,10 +96,7 @@ async function loadData() {
   updateStats();
 }
 
-async function loadVisited() {
-  // Prova prima il file (se il dirHandle è già pronto da sessione precedente)
-  const fromFile = await readFile();
-  if (fromFile !== null) return fromFile;
+function loadVisited() {
   return JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 }
 
