@@ -1,34 +1,56 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 )
 
+//go:embed static
+var staticFiles embed.FS
+
 const port = "8080"
 
 func main() {
+	// Percorso del file JSON accanto all'exe
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Println("Errore:", err)
 		os.Exit(1)
 	}
-	dir := filepath.Dir(exe)
-	saveFile := filepath.Join(dir, "salvataggi", "comuni-passeggiati.json")
+	saveFile := filepath.Join(filepath.Dir(exe), "comuni-passeggiati.json")
 
-	// Assicura che la cartella salvataggi esista
-	os.MkdirAll(filepath.Join(dir, "salvataggi"), 0755)
+	// Sottocartella "static" dall'embedded FS
+	sub, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		fmt.Println("Errore embed:", err)
+		os.Exit(1)
+	}
 
-	// Serve i file statici
-	http.Handle("/", http.FileServer(http.Dir(dir)))
+	mux := http.NewServeMux()
 
-	// POST /save  →  scrive salvataggi/comuni-passeggiati.json
-	http.HandleFunc("/save", func(w http.ResponseWriter, r *http.Request) {
+	// File statici (HTML, JS, CSS) — tutti incorporati nell'exe
+	mux.Handle("/", http.FileServer(http.FS(sub)))
+
+	// GET /load — legge comuni-passeggiati.json accanto all'exe
+	mux.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		data, err := os.ReadFile(saveFile)
+		if err != nil {
+			w.Write([]byte("{}"))
+			return
+		}
+		w.Write(data)
+	})
+
+	// POST /save — scrive comuni-passeggiati.json accanto all'exe
+	mux.HandleFunc("/save", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Method not allowed", 405)
 			return
@@ -38,7 +60,6 @@ func main() {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		// Verifica che sia JSON valido
 		var v interface{}
 		if err := json.Unmarshal(body, &v); err != nil {
 			http.Error(w, "JSON non valido", 400)
@@ -61,14 +82,12 @@ func main() {
 	fmt.Println("=========================================")
 	fmt.Println("  Comuni Passeggiati")
 	fmt.Println("=========================================")
-	fmt.Println("  Server avviato su " + url)
-	fmt.Println("  Il browser si apre automaticamente.")
-	fmt.Println("")
+	fmt.Println("  Avviato su " + url)
 	fmt.Println("  Tieni questa finestra aperta.")
 	fmt.Println("  Chiudila quando hai finito.")
 	fmt.Println("=========================================")
 
-	if err := http.ListenAndServe("127.0.0.1:"+port, nil); err != nil {
+	if err := http.ListenAndServe("127.0.0.1:"+port, mux); err != nil {
 		fmt.Println("Errore:", err)
 		time.Sleep(3 * time.Second)
 		os.Exit(1)
