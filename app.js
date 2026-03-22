@@ -65,9 +65,12 @@ function setGistIcon(icon) {
 
 async function gistApiFetch(token, gistId) {
   const r = await fetch(`https://api.github.com/gists/${gistId}`, {
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
   });
-  if (!r.ok) throw new Error(`Errore ${r.status}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(`${r.status} – ${body.message || 'errore sconosciuto'}`);
+  }
   const data = await r.json();
   const file = data.files[GIST_FILE];
   if (!file) throw new Error('File non trovato nel Gist');
@@ -78,7 +81,7 @@ async function gistApiSave(token, gistId, visited) {
   const r = await fetch(`https://api.github.com/gists/${gistId}`, {
     method: 'PATCH',
     headers: {
-      Authorization: `token ${token}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github.v3+json',
       'Content-Type': 'application/json'
     },
@@ -91,7 +94,7 @@ async function gistApiCreate(token) {
   const r = await fetch('https://api.github.com/gists', {
     method: 'POST',
     headers: {
-      Authorization: `token ${token}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github.v3+json',
       'Content-Type': 'application/json'
     },
