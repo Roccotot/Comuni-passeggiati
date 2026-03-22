@@ -294,15 +294,12 @@ function renderTable() {
 
   dom.tbody().innerHTML = slice.map(c => {
     const vis = !!state.visited[c.id];
-    return `<tr class="${vis ? 'visitato' : ''}" data-id="${c.id}" data-nome="${escHtml(c.comune)}">
-      <td class="text-center">
-        <span class="visit-dot ${vis ? 'dot-verde' : 'dot-rosso'}" title="${vis ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare'}"></span>
-      </td>
+    return `<tr class="${vis ? 'visitato' : 'non-visitato'}" data-id="${c.id}" data-nome="${escHtml(c.comune)}" title="${vis ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare'}">
       <td class="fw-semibold">${escHtml(c.comune)}</td>
       <td>${escHtml(c.provincia)}</td>
       <td>${escHtml(c.regione)}</td>
-      <td class="text-end text-muted">${c.lat != null ? c.lat.toFixed(5) : '—'}</td>
-      <td class="text-end text-muted">${c.lng != null ? c.lng.toFixed(5) : '—'}</td>
+      <td class="text-end">${c.lat != null ? c.lat.toFixed(5) : '—'}</td>
+      <td class="text-end">${c.lng != null ? c.lng.toFixed(5) : '—'}</td>
     </tr>`;
   }).join('');
 
@@ -420,12 +417,9 @@ function confermaToggle() {
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
   if (row) {
-    const dot = row.querySelector('.visit-dot');
-    if (dot) {
-      dot.className = `visit-dot ${newVal ? 'dot-verde' : 'dot-rosso'}`;
-      dot.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
-    }
     row.classList.toggle('visitato', newVal);
+    row.classList.toggle('non-visitato', !newVal);
+    row.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
   }
 
   updateStats();
