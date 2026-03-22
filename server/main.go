@@ -1,42 +1,61 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"net"
+	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 )
 
+const port = "8080"
+
 func main() {
-	// Serve i file dalla cartella dove si trova l'exe
 	exe, err := os.Executable()
 	if err != nil {
-		exe = "."
+		fmt.Println("Errore:", err)
+		os.Exit(1)
 	}
 	dir := filepath.Dir(exe)
+	saveFile := filepath.Join(dir, "salvataggi", "comuni-passeggiati.json")
 
-	port := "8080"
+	// Assicura che la cartella salvataggi esista
+	os.MkdirAll(filepath.Join(dir, "salvataggi"), 0755)
 
-	// Se la porta è occupata, prova le successive
-	for p := 8080; p <= 8090; p++ {
-		port = fmt.Sprintf("%d", p)
-		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
-		if err == nil {
-			ln.Close()
-			break
+	// Serve i file statici
+	http.Handle("/", http.FileServer(http.Dir(dir)))
+
+	// POST /save  →  scrive salvataggi/comuni-passeggiati.json
+	http.HandleFunc("/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
 		}
-	}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		// Verifica che sia JSON valido
+		var v interface{}
+		if err := json.Unmarshal(body, &v); err != nil {
+			http.Error(w, "JSON non valido", 400)
+			return
+		}
+		if err := os.WriteFile(saveFile, body, 0644); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
 
 	url := "http://localhost:" + port
 
-	http.Handle("/", http.FileServer(http.Dir(dir)))
-
 	go func() {
 		time.Sleep(400 * time.Millisecond)
-		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		openBrowser(url)
 	}()
 
 	fmt.Println("=========================================")

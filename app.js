@@ -47,8 +47,15 @@ const dom = {
 let map, layerAll, layerVisited;
 
 // ── Salvataggio ────────────────────────────────────────────
-function saveVisited() {
-  localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+async function saveVisited() {
+  const json = JSON.stringify(state.visited);
+  localStorage.setItem('comuni_visited', json);
+  // Scrive su salvataggi/comuni-passeggiati.json tramite il server
+  try {
+    await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
+  } catch {
+    // Aperto senza server (file://): solo localStorage
+  }
 }
 
 function importData(file) {
@@ -86,7 +93,7 @@ async function loadData() {
   state.comuni = window.COMUNI_DATA;
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
-  state.visited = loadVisited();
+  state.visited = await loadVisited();
 
   dom.loading().classList.add('d-none');
   dom.tableWrap().classList.remove('d-none');
@@ -96,7 +103,16 @@ async function loadData() {
   updateStats();
 }
 
-function loadVisited() {
+async function loadVisited() {
+  // Carica dal file (via server): sempre aggiornato, indipendente dal browser
+  try {
+    const res = await fetch('/salvataggi/comuni-passeggiati.json?_=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('comuni_visited', JSON.stringify(data));
+      return data;
+    }
+  } catch {}
   return JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 }
 
@@ -277,7 +293,7 @@ function handleRowClick(e) {
   confirmModal.show();
 }
 
-function confermaToggle() {
+async function confermaToggle() {
   if (!state.pendingToggle) return;
   const { id, nome, newVal } = state.pendingToggle;
   state.pendingToggle = null;
