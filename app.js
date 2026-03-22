@@ -138,17 +138,22 @@ async function syncFromGist() {
   }
 }
 
-async function pushToGist() {
-  const cfg = getGistConfig();
-  if (!cfg) return;
-  setGistIcon('🔄');
-  try {
-    await gistApiSave(cfg.token, cfg.gistId, state.visited);
-    setGistIcon('☁️');
-  } catch (e) {
-    setGistIcon('⚠️');
-    showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
-  }
+let _pushTimer = null;
+function pushToGist() {
+  clearTimeout(_pushTimer);
+  setGistIcon('⏳');
+  _pushTimer = setTimeout(async () => {
+    const cfg = getGistConfig();
+    if (!cfg) return;
+    setGistIcon('🔄');
+    try {
+      await gistApiSave(cfg.token, cfg.gistId, state.visited);
+      setGistIcon('☁️');
+    } catch (e) {
+      setGistIcon('⚠️');
+      showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
+    }
+  }, 2000);
 }
 
 // ===========================================================
