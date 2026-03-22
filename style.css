@@ -1,0 +1,157 @@
+/* ===== GLOBAL ===== */
+body {
+  font-size: 0.9rem;
+  background: #f8f9fa;
+}
+
+/* ===== NAVBAR ===== */
+.navbar-brand {
+  letter-spacing: 0.5px;
+}
+
+/* ===== TABLE ===== */
+#comuni-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+#comuni-table th.sortable:hover {
+  background: #343a40;
+}
+#comuni-table th.sort-asc .sort-icon::after { content: " ▲"; }
+#comuni-table th.sort-desc .sort-icon::after { content: " ▼"; }
+#comuni-table th.sort-asc .sort-icon,
+#comuni-table th.sort-desc .sort-icon { color: #a8e6cf; }
+
+#comuni-table tbody tr:hover {
+  background-color: #e8f5e9 !important;
+}
+#comuni-table tbody tr.visitato {
+  background-color: #d4edda;
+}
+#comuni-table tbody tr.visitato:hover {
+  background-color: #c3e6cb !important;
+}
+
+.visit-cb {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #198754;
+}
+
+/* ===== PAGINATION ===== */
+.page-link {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* ===== MAP ===== */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.popup-visitato {
+  color: #198754;
+  font-weight: bold;
+}
+.popup-non-visitato {
+  color: #6c757d;
+}
+
+/* ===== STATISTICS ===== */
+.stat-regione {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #dee2e6;
+  transition: box-shadow 0.2s;
+}
+.stat-regione:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.stat-regione-header {
+  background: #198754;
+  color: white;
+  border-radius: 10px 10px 0 0;
+  padding: 10px 14px;
+}
+.stat-progress {
+  height: 8px;
+  border-radius: 4px;
+}
+.stat-pct-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+}
+.provincia-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.82rem;
+}
+.provincia-row:last-child { border-bottom: none; }
+.provincia-name {
+  min-width: 160px;
+  color: #495057;
+}
+.provincia-count {
+  min-width: 70px;
+  text-align: right;
+  color: #6c757d;
+  font-size: 0.78rem;
+}
+.provincia-progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #e9ecef;
+}
+.provincia-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: #20c997;
+  transition: width 0.4s;
+}
+
+/* ===== MODAL ===== */
+.modal-header.segna {
+  background: linear-gradient(135deg, #198754, #20c997);
+  color: white;
+}
+.modal-header.rimuovi {
+  background: linear-gradient(135deg, #dc3545, #fd7e14);
+  color: white;
+}
+
+/* ===== TOAST ===== */
+.toast.bg-success { background-color: #198754 !important; }
+.toast.bg-warning { background-color: #ffc107 !important; }
+
+/* ===== LOADING ===== */
+#loading-spinner {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 576px) {
+  .navbar-brand { font-size: 1rem; }
+  #comuni-table th:nth-child(5),
+  #comuni-table th:nth-child(6),
+  #comuni-table td:nth-child(5),
+  #comuni-table td:nth-child(6) { display: none; }
+}
