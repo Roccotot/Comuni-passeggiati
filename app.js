@@ -138,22 +138,25 @@ async function syncFromGist() {
   }
 }
 
-let _pushTimer = null;
-function pushToGist() {
-  clearTimeout(_pushTimer);
-  setGistIcon('⏳');
-  _pushTimer = setTimeout(async () => {
-    const cfg = getGistConfig();
-    if (!cfg) return;
-    setGistIcon('🔄');
-    try {
-      await gistApiSave(cfg.token, cfg.gistId, state.visited);
-      setGistIcon('☁️');
-    } catch (e) {
-      setGistIcon('⚠️');
-      showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
-    }
-  }, 2000);
+let _gistDirty = false;
+
+async function pushToGist() {
+  const cfg = getGistConfig();
+  if (!cfg) return;
+  setGistIcon('🔄');
+  try {
+    await gistApiSave(cfg.token, cfg.gistId, state.visited);
+    _gistDirty = false;
+    setGistIcon('☁️');
+  } catch (e) {
+    setGistIcon('⚠️');
+    showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
+  }
+}
+
+function markGistDirty() {
+  _gistDirty = true;
+  setGistIcon('💾');
 }
 
 // ===========================================================
@@ -440,7 +443,7 @@ function confermaToggle() {
     delete state.visited[id];
   }
   localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-  pushToGist();
+  markGistDirty();
 
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
@@ -717,8 +720,22 @@ function setupEventListeners() {
   });
 
   $('btn-gist-sync').addEventListener('click', async () => {
+    await pushToGist();
     await syncFromGist();
     showToast('☁️ Sincronizzato con Gist!', 'bg-success');
+  });
+
+  // Salva su Gist quando l'utente lascia la pagina
+  window.addEventListener('beforeunload', () => {
+    if (!_gistDirty) return;
+    const cfg = getGistConfig();
+    if (!cfg) return;
+    fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(state.visited) } } }),
+      keepalive: true
+    });
   });
 
   $('btn-gist-disconnect').addEventListener('click', () => {
