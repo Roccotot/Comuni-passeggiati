@@ -383,26 +383,33 @@ function handleCheckboxChange(e) {
   const nome = cb.dataset.nome;
   const newVal = cb.checked;
 
-  // Ripristina subito la casella — la cambiamo solo dopo conferma
-  cb.checked = !newVal;
+  if (newVal) {
+    // Aggiunge spunta: nessuna conferma, applica subito
+    state.visited[id] = true;
+    localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+    pushToGist();
 
+    const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
+    if (row) {
+      row.classList.add('visitato');
+    }
+
+    updateStats();
+    if (state.mapReady) updateMapMarkers();
+    showToast(`✅ ${nome} segnato come visitato!`, 'bg-success');
+    return;
+  }
+
+  // Rimuove spunta: chiede conferma
+  cb.checked = true; // ripristina finché non confermato
   state.pendingToggle = { id, nome, newVal };
 
-  if (newVal) {
-    dom.modalHeader().className = 'modal-header segna';
-    dom.modalTitolo().textContent = '✅ Segna come visitato';
-    dom.modalTesto().innerHTML =
-      `Hai passeggiato per la via principale di <strong>${escHtml(nome)}</strong>?`;
-    dom.btnConferma().className = 'btn btn-success btn-sm px-4';
-    dom.btnConferma().textContent = 'Sì, confermo!';
-  } else {
-    dom.modalHeader().className = 'modal-header rimuovi';
-    dom.modalTitolo().textContent = '❌ Rimuovi visita';
-    dom.modalTesto().innerHTML =
-      `Vuoi rimuovere <strong>${escHtml(nome)}</strong> dai comuni visitati?`;
-    dom.btnConferma().className = 'btn btn-danger btn-sm px-4';
-    dom.btnConferma().textContent = 'Sì, rimuovi';
-  }
+  dom.modalHeader().className = 'modal-header rimuovi';
+  dom.modalTitolo().textContent = '❌ Rimuovi visita';
+  dom.modalTesto().innerHTML =
+    `Vuoi rimuovere <strong>${escHtml(nome)}</strong> dai comuni visitati?`;
+  dom.btnConferma().className = 'btn btn-danger btn-sm px-4';
+  dom.btnConferma().textContent = 'Sì, rimuovi';
 
   if (!confirmModal) {
     confirmModal = new bootstrap.Modal($('modal-conferma'));
