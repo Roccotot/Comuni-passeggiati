@@ -46,6 +46,97 @@ const dom = {
 // ── Leaflet map ────────────────────────────────────────────
 let map, layerAll, layerVisited;
 
+// ── GitHub Gist ────────────────────────────────────────────
+const GIST_FILE = 'comuni-passeggiati.json';
+
+function getGistConfig() {
+  try { return JSON.parse(localStorage.getItem('gist_config') || 'null'); }
+  catch { return null; }
+}
+function setGistConfig(cfg) {
+  if (cfg) localStorage.setItem('gist_config', JSON.stringify(cfg));
+  else localStorage.removeItem('gist_config');
+}
+
+function setGistIcon(icon) {
+  const el = document.getElementById('gist-icon');
+  if (el) el.textContent = icon;
+}
+
+async function gistApiFetch(token, gistId) {
+  const r = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+  });
+  if (!r.ok) throw new Error(`Errore ${r.status}`);
+  const data = await r.json();
+  const file = data.files[GIST_FILE];
+  if (!file) throw new Error('File non trovato nel Gist');
+  return JSON.parse(file.content || '{}');
+}
+
+async function gistApiSave(token, gistId, visited) {
+  const r = await fetch(`https://api.github.com/gists/${gistId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(visited) } } })
+  });
+  if (!r.ok) throw new Error(`Errore ${r.status}`);
+}
+
+async function gistApiCreate(token) {
+  const r = await fetch('https://api.github.com/gists', {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      description: 'Comuni Passeggiati - dati visite',
+      public: false,
+      files: { [GIST_FILE]: { content: '{}' } }
+    })
+  });
+  if (!r.ok) throw new Error(`Errore ${r.status}`);
+  const data = await r.json();
+  return data.id;
+}
+
+async function syncFromGist() {
+  const cfg = getGistConfig();
+  if (!cfg) return;
+  setGistIcon('🔄');
+  try {
+    const remote = await gistApiFetch(cfg.token, cfg.gistId);
+    state.visited = remote;
+    localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+    updateStats();
+    renderTable();
+    if (state.mapReady) updateMapMarkers();
+    setGistIcon('☁️');
+  } catch (e) {
+    setGistIcon('⚠️');
+    showToast('Errore Gist: ' + e.message, 'bg-danger');
+  }
+}
+
+async function pushToGist() {
+  const cfg = getGistConfig();
+  if (!cfg) return;
+  setGistIcon('🔄');
+  try {
+    await gistApiSave(cfg.token, cfg.gistId, state.visited);
+    setGistIcon('☁️');
+  } catch (e) {
+    setGistIcon('⚠️');
+    showToast('Errore salvataggio Gist: ' + e.message, 'bg-danger');
+  }
+}
+
 // ===========================================================
 // INIT
 // ===========================================================
@@ -74,6 +165,12 @@ async function loadData() {
   populateFilters();
   applyFilters();
   updateStats();
+
+  // Se c'è un Gist configurato, sincronizza in background
+  if (getGistConfig()) {
+    setGistIcon('☁️');
+    syncFromGist();
+  }
 }
 
 // ===========================================================
@@ -273,6 +370,7 @@ function confermaToggle() {
     delete state.visited[id];
   }
   localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
+  pushToGist();
 
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
@@ -504,6 +602,61 @@ function setupEventListeners() {
 
   // Conferma modal
   dom.btnConferma().addEventListener('click', confermaToggle);
+
+  // Gist modal
+  let gistModal;
+  function openGistModal() {
+    const cfg = getGistConfig();
+    document.getElementById('gist-disconnected').classList.toggle('d-none', !!cfg);
+    document.getElementById('gist-connected').classList.toggle('d-none', !cfg);
+    document.getElementById('gist-connect-error').classList.add('d-none');
+    if (!gistModal) gistModal = new bootstrap.Modal($('modal-gist'));
+    gistModal.show();
+  }
+
+  $('btn-gist-open').addEventListener('click', openGistModal);
+
+  $('btn-gist-connect').addEventListener('click', async () => {
+    const token = document.getElementById('gist-token-input').value.trim();
+    const errEl = document.getElementById('gist-connect-error');
+    errEl.classList.add('d-none');
+    if (!token) { errEl.textContent = 'Inserisci il token.'; errEl.classList.remove('d-none'); return; }
+
+    const btn = $('btn-gist-connect');
+    btn.disabled = true;
+    btn.textContent = 'Connessione…';
+
+    try {
+      const gistId = await gistApiCreate(token);
+      setGistConfig({ token, gistId });
+      // Salva i dati locali sul nuovo Gist
+      await gistApiSave(token, gistId, state.visited);
+      setGistIcon('☁️');
+      document.getElementById('gist-disconnected').classList.add('d-none');
+      document.getElementById('gist-connected').classList.remove('d-none');
+    } catch (e) {
+      errEl.textContent = 'Errore: ' + e.message + '. Controlla il token.';
+      errEl.classList.remove('d-none');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Collega Gist';
+    }
+  });
+
+  $('btn-gist-sync').addEventListener('click', async () => {
+    await syncFromGist();
+    showToast('☁️ Sincronizzato con Gist!', 'bg-success');
+  });
+
+  $('btn-gist-disconnect').addEventListener('click', () => {
+    setGistConfig(null);
+    setGistIcon('💾');
+    document.getElementById('gist-disconnected').classList.remove('d-none');
+    document.getElementById('gist-connected').classList.add('d-none');
+    document.getElementById('gist-token-input').value = '';
+    showToast('Disconnesso da Gist', 'bg-warning');
+    gistModal.hide();
+  });
 
   // Tab mappa: inizializza Leaflet al primo accesso
   document.getElementById('tab-mappa-link').addEventListener('shown.bs.tab', () => {
