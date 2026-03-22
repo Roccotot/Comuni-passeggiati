@@ -90,15 +90,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadData() {
-  try {
-    const res = await fetch('comuni.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    state.comuni = await res.json();
-  } catch (e) {
+  if (typeof window.COMUNI_DATA === 'undefined') {
     dom.loading().innerHTML =
-      '<div class="alert alert-danger">Errore nel caricamento di comuni.json.<br><small>' + e.message + '</small></div>';
+      '<div class="alert alert-danger">Errore: comuni-data.js non trovato.<br><small>Assicurati che tutti i file siano nella stessa cartella.</small></div>';
     return;
   }
+  state.comuni = window.COMUNI_DATA;
 
   // Carica dati visitati: prima prova il file salvataggi/, poi localStorage
   state.visited = await loadVisited();
@@ -112,17 +109,7 @@ async function loadData() {
 }
 
 async function loadVisited() {
-  try {
-    const res = await fetch('salvataggi/comuni-passeggiati.json');
-    if (res.ok) {
-      const data = await res.json();
-      // Sincronizza anche localStorage
-      localStorage.setItem('comuni_visited', JSON.stringify(data));
-      return data;
-    }
-  } catch {
-    // file non trovato o CORS: usa localStorage
-  }
+  // Su file:// i fetch locali sono bloccati: usa sempre localStorage
   return JSON.parse(localStorage.getItem('comuni_visited') || '{}');
 }
 
