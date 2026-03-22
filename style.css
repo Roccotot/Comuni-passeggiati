@@ -26,16 +26,16 @@ body {
 #comuni-table tbody tr {
   cursor: pointer;
 }
-#comuni-table tbody tr.visitato {
+#comuni-table tbody tr.visitato > td {
   background-color: #d4edda !important;
 }
-#comuni-table tbody tr.visitato:hover {
+#comuni-table tbody tr.visitato:hover > td {
   background-color: #b8dfc4 !important;
 }
-#comuni-table tbody tr.non-visitato {
+#comuni-table tbody tr.non-visitato > td {
   background-color: #fde8ea !important;
 }
-#comuni-table tbody tr.non-visitato:hover {
+#comuni-table tbody tr.non-visitato:hover > td {
   background-color: #f5c6cb !important;
 }
 
