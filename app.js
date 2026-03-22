@@ -190,8 +190,9 @@ function renderTable() {
       <td class="fw-semibold">${escHtml(c.comune)}</td>
       <td>${escHtml(c.provincia)}</td>
       <td>${escHtml(c.regione)}</td>
-      <td class="text-end">${c.lat != null ? c.lat.toFixed(5) : '—'}</td>
-      <td class="text-end">${c.lng != null ? c.lng.toFixed(5) : '—'}</td>
+      <td class="text-end">${c.abitanti != null ? c.abitanti.toLocaleString('it-IT') : '—'}</td>
+      <td class="text-end">${c.altitudine != null ? c.altitudine + ' m' : '—'}</td>
+      <td class="text-end">${c.temp_media != null ? c.temp_media + ' °C' : '—'}</td>
     </tr>`;
   }).join('');
 
