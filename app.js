@@ -13,7 +13,7 @@ const state = {
   filters: { regione: '', provincia: '', visitato: '' },
   search: '',
   mapReady: false,
-  pendingToggle: null,  // { id, comune, newVal }
+
 };
 
 // ── Riferimenti DOM ────────────────────────────────────────
@@ -38,7 +38,7 @@ const dom = {
   modalTitolo:  () => $('modal-titolo'),
   modalTesto:   () => $('modal-testo'),
   modalHeader:  () => $('modal-header'),
-  btnConferma:  () => $('btn-conferma'),
+
   toastEl:      () => $('toast-notifica'),
   toastTesto:   () => $('toast-testo'),
 };
@@ -258,7 +258,6 @@ function updateSortIcons() {
 // ===========================================================
 // CHECKBOX + CONFERMA
 // ===========================================================
-let confirmModal;
 
 function handleRowClick(e) {
   const row = e.target.closest('tr[data-id]');
@@ -269,35 +268,6 @@ function handleRowClick(e) {
   const currentlyVisited = !!state.visited[id];
   const newVal = !currentlyVisited;
 
-  state.pendingToggle = { id, nome, newVal };
-
-  if (newVal) {
-    dom.modalHeader().className = 'modal-header segna';
-    dom.modalTitolo().textContent = '🟢 Segna come visitato';
-    dom.modalTesto().innerHTML =
-      `Hai passeggiato per la via principale di <strong>${escHtml(nome)}</strong>?`;
-    dom.btnConferma().className = 'btn btn-success btn-sm px-4';
-    dom.btnConferma().textContent = 'Sì, confermo!';
-  } else {
-    dom.modalHeader().className = 'modal-header rimuovi';
-    dom.modalTitolo().textContent = '🔴 Rimuovi visita';
-    dom.modalTesto().innerHTML =
-      `Vuoi rimuovere <strong>${escHtml(nome)}</strong> dai comuni visitati?`;
-    dom.btnConferma().className = 'btn btn-danger btn-sm px-4';
-    dom.btnConferma().textContent = 'Sì, rimuovi';
-  }
-
-  if (!confirmModal) {
-    confirmModal = new bootstrap.Modal($('modal-conferma'));
-  }
-  confirmModal.show();
-}
-
-async function confermaToggle() {
-  if (!state.pendingToggle) return;
-  const { id, nome, newVal } = state.pendingToggle;
-  state.pendingToggle = null;
-
   if (newVal) {
     state.visited[id] = true;
   } else {
@@ -306,7 +276,6 @@ async function confermaToggle() {
 
   saveVisited();
 
-  // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
   if (row) {
     row.classList.toggle('visitato', newVal);
@@ -318,13 +287,9 @@ async function confermaToggle() {
   if (state.mapReady) updateMapMarkers();
 
   showToast(
-    newVal
-      ? `✅ ${nome} segnato come visitato!`
-      : `❌ Visita rimossa: ${nome}`,
+    newVal ? `✅ ${nome}` : `❌ ${nome}`,
     newVal ? 'bg-success' : 'bg-warning'
   );
-
-  confirmModal.hide();
 }
 
 // ===========================================================
@@ -524,7 +489,6 @@ function setupEventListeners() {
   });
 
   dom.tbody().addEventListener('click', handleRowClick);
-  dom.btnConferma().addEventListener('click', confermaToggle);
 
   // Importa
   $('btn-import').addEventListener('click', () => {
