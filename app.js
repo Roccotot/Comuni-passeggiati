@@ -294,10 +294,9 @@ function renderTable() {
 
   dom.tbody().innerHTML = slice.map(c => {
     const vis = !!state.visited[c.id];
-    return `<tr class="${vis ? 'visitato' : ''}" data-id="${c.id}">
+    return `<tr class="${vis ? 'visitato' : ''}" data-id="${c.id}" data-nome="${escHtml(c.comune)}">
       <td class="text-center">
-        <input type="checkbox" class="visit-cb" data-id="${c.id}" data-nome="${escHtml(c.comune)}"
-               ${vis ? 'checked' : ''} title="${vis ? 'Rimuovi visita' : 'Segna come visitato'}">
+        <span class="visit-dot ${vis ? 'dot-verde' : 'dot-rosso'}" title="${vis ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare'}"></span>
       </td>
       <td class="fw-semibold">${escHtml(c.comune)}</td>
       <td>${escHtml(c.provincia)}</td>
@@ -306,11 +305,6 @@ function renderTable() {
       <td class="text-end text-muted">${c.lng != null ? c.lng.toFixed(5) : '—'}</td>
     </tr>`;
   }).join('');
-
-  // Listener checkbox
-  dom.tbody().querySelectorAll('.visit-cb').forEach(cb => {
-    cb.addEventListener('change', handleCheckboxChange);
-  });
 
   renderPagination();
   updateSortIcons();
@@ -377,39 +371,32 @@ function updateSortIcons() {
 // ===========================================================
 let confirmModal;
 
-function handleCheckboxChange(e) {
-  const cb = e.target;
-  const id = cb.dataset.id;
-  const nome = cb.dataset.nome;
-  const newVal = cb.checked;
+function handleRowClick(e) {
+  const row = e.target.closest('tr[data-id]');
+  if (!row) return;
 
-  if (newVal) {
-    // Aggiunge spunta: nessuna conferma, applica subito
-    state.visited[id] = true;
-    localStorage.setItem('comuni_visited', JSON.stringify(state.visited));
-    pushToGist();
+  const id = row.dataset.id;
+  const nome = row.dataset.nome;
+  const currentlyVisited = !!state.visited[id];
+  const newVal = !currentlyVisited;
 
-    const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
-    if (row) {
-      row.classList.add('visitato');
-    }
-
-    updateStats();
-    if (state.mapReady) updateMapMarkers();
-    showToast(`✅ ${nome} segnato come visitato!`, 'bg-success');
-    return;
-  }
-
-  // Rimuove spunta: chiede conferma
-  cb.checked = true; // ripristina finché non confermato
   state.pendingToggle = { id, nome, newVal };
 
-  dom.modalHeader().className = 'modal-header rimuovi';
-  dom.modalTitolo().textContent = '❌ Rimuovi visita';
-  dom.modalTesto().innerHTML =
-    `Vuoi rimuovere <strong>${escHtml(nome)}</strong> dai comuni visitati?`;
-  dom.btnConferma().className = 'btn btn-danger btn-sm px-4';
-  dom.btnConferma().textContent = 'Sì, rimuovi';
+  if (newVal) {
+    dom.modalHeader().className = 'modal-header segna';
+    dom.modalTitolo().textContent = '🟢 Segna come visitato';
+    dom.modalTesto().innerHTML =
+      `Hai passeggiato per la via principale di <strong>${escHtml(nome)}</strong>?`;
+    dom.btnConferma().className = 'btn btn-success btn-sm px-4';
+    dom.btnConferma().textContent = 'Sì, confermo!';
+  } else {
+    dom.modalHeader().className = 'modal-header rimuovi';
+    dom.modalTitolo().textContent = '🔴 Rimuovi visita';
+    dom.modalTesto().innerHTML =
+      `Vuoi rimuovere <strong>${escHtml(nome)}</strong> dai comuni visitati?`;
+    dom.btnConferma().className = 'btn btn-danger btn-sm px-4';
+    dom.btnConferma().textContent = 'Sì, rimuovi';
+  }
 
   if (!confirmModal) {
     confirmModal = new bootstrap.Modal($('modal-conferma'));
@@ -433,8 +420,11 @@ function confermaToggle() {
   // Aggiorna riga nella tabella
   const row = dom.tbody().querySelector(`tr[data-id="${id}"]`);
   if (row) {
-    const cb = row.querySelector('.visit-cb');
-    if (cb) cb.checked = newVal;
+    const dot = row.querySelector('.visit-dot');
+    if (dot) {
+      dot.className = `visit-dot ${newVal ? 'dot-verde' : 'dot-rosso'}`;
+      dot.title = newVal ? 'Visitato — clicca per rimuovere' : 'Non visitato — clicca per segnare';
+    }
     row.classList.toggle('visitato', newVal);
   }
 
@@ -657,6 +647,9 @@ function setupEventListeners() {
       applyFilters();
     });
   });
+
+  // Click su riga tabella (event delegation)
+  dom.tbody().addEventListener('click', handleRowClick);
 
   // Conferma modal
   dom.btnConferma().addEventListener('click', confermaToggle);
